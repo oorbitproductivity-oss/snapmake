@@ -15,29 +15,15 @@
   const MODELS = ["gemini-3.5-flash", "gpt-5.4-mini", "claude-sonnet-4-6"];
   const MAX_PHOTOS = 4;
   const STORE_KEY = "snapmake.saved.v1";
-
-  const CHIPS = {
-    auto: ["What can I make with these?", "Dinner for two from what's here", "Fix this", "Turn this into a gift"],
-    cook: ["A 20-minute dinner", "Something sweet", "Use it all, waste nothing", "Make it kid-friendly"],
-    build: ["Fix this cabinet door", "Build a shelf from this", "Mount this on the wall", "Why is this broken?"],
-    craft: ["Turn these beads into a bracelet", "A birthday gift from this", "Upcycle this into decor", "Matching pair of earrings"],
-    care: ["Is this safe for my cat?", "A cozy bed for my pet", "Why is this plant drooping?", "Homemade dog treats"],
-  };
-  const MODE_HINT = {
-    auto: "Work out the project type yourself.",
-    cook: "This is a cooking or baking project. Give amounts, temperatures (°F with °C), and doneness cues.",
-    build: "This is a build, repair, or DIY home project. Name exact hardware and sizes where you can, and include safety steps.",
-    craft: "This is a craft or jewelry project. Name materials, sizes, and techniques precisely.",
-    care: "This is about pets or plants. Put animal or plant safety first, flag anything toxic, and say when to call a vet or expert.",
-  };
+  const CHIPS = ["Dinner for two", "Fix this", "A gift from this", "Is this safe for my pet?"];
 
   const state = {
     photos: [], // { blob, url }
     result: null,
-    record: null, // saved record for the current result
-    heroImg: null, // data URL of first photo for result hero
+    record: null,
+    heroImg: null,
     abort: null,
-    timers: {}, // stepIndex -> { total, left, id, ringing }
+    timers: {}, // stepIndex -> { left, id, ringing, ringId }
     focusIndex: 0,
     speak: false,
     wakeLock: null,
@@ -48,6 +34,26 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  const fmt = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+
+  const ICON = {
+    back: `<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    clock: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+    gauge: `<svg viewBox="0 0 24 24"><path d="M4 18a8 8 0 1116 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 18l4-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+    yield: `<svg viewBox="0 0 24 24"><path d="M4 12h16a8 8 0 01-16 0z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
+    list: `<svg viewBox="0 0 24 24"><path d="M9 7h11M9 12h11M9 17h11M4.5 7h.01M4.5 12h.01M4.5 17h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+    play: `<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>`,
+    share: `<svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 13v6h14v-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    print: `<svg viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5a1 1 0 01-1-1v-5a2 2 0 012-2h12a2 2 0 012 2v5a1 1 0 01-1 1h-2M7 14h10v6H7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
+    check: `<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    arrow: `<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    up: `<svg viewBox="0 0 24 24"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    alert: `<svg viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10v4.5M12 17.2v.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+    info: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5.5M12 7.7v.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+    x: `<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`,
+    plus: `<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+    doc: `<svg viewBox="0 0 24 24"><path d="M7 3.5h7l4 4V20a.5.5 0 01-.5.5h-10A.5.5 0 017 20z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`,
+  };
 
   let toastT;
   function toast(msg, ms = 2600) {
@@ -60,7 +66,7 @@
 
   function showView(id) {
     $$(".view").forEach((v) => v.classList.toggle("is-active", v.id === id));
-    window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+    window.scrollTo(0, 0);
   }
 
   /* ---------------- images ---------------- */
@@ -73,8 +79,8 @@
     });
   }
 
-  async function shrink(file, max = 1280) {
-    const url = URL.createObjectURL(file);
+  async function resized(blob, max, type = "blob", q = 0.86) {
+    const url = URL.createObjectURL(blob);
     try {
       const img = await loadImg(url);
       const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
@@ -82,8 +88,7 @@
       c.width = Math.round(img.naturalWidth * s);
       c.height = Math.round(img.naturalHeight * s);
       c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.86));
-      return blob;
+      return type === "dataURL" ? c.toDataURL("image/jpeg", q) : await new Promise((r) => c.toBlob(r, "image/jpeg", q));
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -120,51 +125,41 @@
     return new Promise((r) => c.toBlob(r, "image/jpeg", 0.85));
   }
 
-  async function thumbDataURL(blob, max = 900, q = 0.8) {
-    const url = URL.createObjectURL(blob);
-    try {
-      const img = await loadImg(url);
-      const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.naturalWidth * s);
-      c.height = Math.round(img.naturalHeight * s);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      return c.toDataURL("image/jpeg", q);
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }
-
   async function addFiles(files) {
     const imgs = [...files].filter((f) => f.type.startsWith("image/"));
-    if (!imgs.length) return toast("That isn't an image. Try a photo.");
+    if (!imgs.length) return toast("That isn't an image");
     const room = MAX_PHOTOS - state.photos.length;
-    if (room <= 0) return toast(`You can add up to ${MAX_PHOTOS} photos.`);
-    if (imgs.length > room) toast(`Added the first ${room}. The limit is ${MAX_PHOTOS} photos.`);
+    if (room <= 0) return toast(`Up to ${MAX_PHOTOS} photos`);
+    if (imgs.length > room) toast(`Added ${room}. The limit is ${MAX_PHOTOS} photos.`);
     for (const f of imgs.slice(0, room)) {
       try {
-        const blob = await shrink(f);
+        const blob = await resized(f, 1280);
         state.photos.push({ blob, url: URL.createObjectURL(blob) });
       } catch {
-        toast("Couldn't read one of those images.");
+        toast("Couldn't read that image");
       }
     }
     renderThumbs();
   }
 
   function renderThumbs() {
-    const tray = $("#tray"), list = $("#thumbs"), empty = $("#trayEmpty");
+    const tray = $("#tray"), list = $("#thumbs");
     const n = state.photos.length;
     tray.classList.toggle("has-photos", n > 0);
-    empty.hidden = n > 0;
+    tray.setAttribute("role", n ? "group" : "button");
+    tray.tabIndex = n ? -1 : 0;
+    $("#trayEmpty").hidden = n > 0;
     list.hidden = n === 0;
     list.classList.toggle("one", n === 1);
     list.innerHTML = state.photos
-      .map((p, i) => `<li><img src="${p.url}" alt="Photo ${i + 1}" /><button type="button" class="rm" data-rm="${i}" aria-label="Remove photo ${i + 1}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button></li>`)
+      .map((p, i) => `<li><img src="${p.url}" alt="Photo ${i + 1}" /><button type="button" class="rm" data-rm="${i}" aria-label="Remove photo">${ICON.x}</button></li>`)
       .join("");
-    if (n > 0 && n < MAX_PHOTOS) {
-      list.insertAdjacentHTML("beforeend", `<li class="add" role="button" tabindex="0" data-add><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Add another</li>`);
-    }
+    if (n > 0 && n < MAX_PHOTOS) list.insertAdjacentHTML("beforeend", `<li class="add" role="button" tabindex="0" data-add aria-label="Add another photo">${ICON.plus}<span>Add photo</span></li>`);
+    updateSend();
+  }
+
+  function updateSend() {
+    $("#makeBtn").classList.toggle("is-dim", !state.photos.length && !$("#goal").value.trim());
   }
 
   /* ---------------- AI ---------------- */
@@ -234,20 +229,18 @@
     return j.choices?.[0]?.message?.content || "";
   }
 
-  function buildPrompt({ goal, mode, hasPhoto, photoCount, described }) {
-    return `You are Snapmake, an expert maker, chef, handyman, crafter, and pet/plant care guide.
+  function buildPrompt({ goal, hasPhoto, photoCount, described }) {
+    return `You are Snapmake, an expert cook, maker, handyman, crafter, and pet/plant care guide.
 ${hasPhoto ? `Look carefully at the attached image${photoCount > 1 ? ` (a grid of ${photoCount} photos labeled "Photo 1" to "Photo ${photoCount}")` : ""}. Identify exactly what is in it.` : described ? `The user can't send a photo. They describe what they have as: "${described}".` : "No photo was given; work from the request alone."}
 The user wants: "${goal || "Suggest the best thing to make with what is shown"}"
-${MODE_HINT[mode] || MODE_HINT.auto}
 
-Produce a practical, specific, safe plan a beginner can follow. Prefer what the user already has; mark anything extra they need. Steps should each be one clear action (usually 4-10 steps). If the request is unsafe or impossible with what's shown, set "feasible": false, explain why in "summary", and offer realistic "alternatives".
+Work out what kind of project this is (cooking, building/repair, craft, or pet/plant care). Produce a practical, specific, safe plan a beginner can follow. For cooking give amounts, temperatures (°F with °C), and doneness cues. For repairs name exact hardware and sizes. For pets and plants put safety first, flag anything toxic, and say when to call a vet or expert. Prefer what the user already has; mark anything extra they need. Each step is one clear action (usually 4-10 steps). If the request is unsafe or impossible with what's shown, set "feasible": false, explain why in "summary", and offer realistic "alternatives".
 
 Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this shape:
 {
   "feasible": true,
   "category": "cook" | "build" | "craft" | "care" | "other",
   "title": "Short name of the thing to make (max 7 words)",
-  "title_emphasis": "one word from the title to emphasise",
   "summary": "1-2 friendly sentences on what they'll make and why it suits what they have",
   "spotted": [{"label": "item seen in the photo (1-3 words)", "x": 0-100, "y": 0-100}],
   "time": "total time, e.g. 25 min",
@@ -282,9 +275,8 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
       feasible: r.feasible !== false,
       category: r.category || "other",
       title: r.title || "Your plan",
-      title_emphasis: r.title_emphasis || "",
       summary: r.summary || "",
-      spotted: arr(r.spotted).map((s) => (typeof s === "string" ? { label: s, x: 50, y: 50 } : s)).filter((s) => s && s.label).slice(0, 10),
+      spotted: arr(r.spotted).map((s) => (typeof s === "string" ? { label: s, x: 50, y: 50 } : s)).filter((s) => s && s.label).slice(0, 8),
       time: r.time || "",
       difficulty: Math.max(1, Math.min(5, Number(r.difficulty) || 2)),
       yield: r.yield || "",
@@ -302,6 +294,7 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
   function startScanUI() {
     const frame = $("#scanFrame"), img = $("#scanImg");
     $("#scanTags").innerHTML = "";
+    frame.classList.remove("done");
     if (state.photos[0]) {
       img.src = state.photos[0].url;
       frame.classList.add("has-img");
@@ -310,77 +303,64 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
       frame.classList.remove("has-img");
     }
     const lines = state.photos.length
-      ? ["Looking closely at your photo…", "Naming what's in the picture…", "Matching it to your goal…", "Writing your steps…", "Adding the pro tips…"]
-      : ["Thinking it through…", "Planning the steps…", "Adding the pro tips…"];
+      ? ["Looking at your photo…", "Figuring out what's there…", "Planning the steps…", "Adding tips…", "Almost done…"]
+      : ["Thinking…", "Planning the steps…", "Adding tips…", "Almost done…"];
     let k = 0;
-    const status = $("#scanStatus");
-    const items = $$("#scanSteps li");
     const paint = () => {
-      status.textContent = lines[Math.min(k, lines.length - 1)];
-      const stage = Math.min(3, Math.floor(k * 0.9));
-      items.forEach((li, i) => {
-        li.classList.toggle("is-done", i < stage);
-        li.classList.toggle("is-on", i === stage);
-      });
+      $("#scanStatus").textContent = lines[Math.min(k, lines.length - 1)];
+      $("#scanBar").style.width = `${Math.min(92, 12 + k * 18)}%`;
     };
     paint();
     clearInterval(scanTicker);
-    scanTicker = setInterval(() => {
-      if (k < lines.length - 1) k++;
-      paint();
-    }, 2600);
+    scanTicker = setInterval(() => { k++; paint(); }, 2800);
     showView("viewScan");
   }
   function stopScanUI() {
     clearInterval(scanTicker);
-    $$("#scanSteps li").forEach((li) => {
-      li.classList.remove("is-on");
-      li.classList.add("is-done");
-    });
+    $("#scanBar").style.width = "100%";
+    $("#scanFrame").classList.add("done");
   }
 
   function tagsHTML(spotted) {
     return spotted
       .map((s, i) => {
-        const x = Math.max(4, Math.min(78, Number(s.x) || 50));
-        const y = Math.max(6, Math.min(92, Number(s.y) || 50));
-        return `<span class="tag" style="left:${x}%;top:${y}%;--i:${i};animation-delay:${i * 110}ms">${esc(s.label)}</span>`;
+        const x = Math.max(12, Math.min(88, Number(s.x) || 50));
+        const y = Math.max(8, Math.min(92, Number(s.y) || 50));
+        return `<span class="tag" style="left:${x}%;top:${y}%;animation-delay:${i * 90}ms">${esc(s.label)}</span>`;
       })
       .join("");
   }
 
-  async function run({ goal, mode, described } = {}) {
+  async function run({ goal, described } = {}) {
     goal = (goal ?? $("#goal").value).trim();
-    mode = mode ?? (new FormData($("#composer")).get("mode") || "auto");
     if (!state.photos.length && !goal && !described) {
-      toast("Add a photo or say what you want to make.");
+      toast("Add a photo or type what you want");
       $("#goal").focus();
       return;
     }
 
-    const hasPhoto = state.photos.length > 0 && !described;
     // Open Puter sign-in inside the click so the popup isn't blocked.
     if (!params.has("mock") && window.puter?.auth && !puter.auth.isSignedIn()) {
       try {
         await puter.auth.signIn();
       } catch (e) {
-        return renderError({ kind: "auth", detail: errMsg(e), goal, mode });
+        return renderError({ kind: "auth", detail: errMsg(e), goal });
       }
     }
 
+    const hasPhoto = state.photos.length > 0 && !described;
     state.abort = new AbortController();
     startScanUI();
-    const prompt = buildPrompt({ goal, mode, hasPhoto, photoCount: state.photos.length, described });
+    const prompt = buildPrompt({ goal, hasPhoto, photoCount: state.photos.length, described });
 
     try {
       let txt;
       if (params.has("mock")) {
         await sleep(2400);
-        txt = JSON.stringify(MOCK_RESULT);
+        txt = JSON.stringify(EXAMPLE);
       } else if (hasPhoto) {
         const blob = await collage(state.photos.map((p) => p.blob));
-        const file = new File([blob], "snapmake.jpg", { type: "image/jpeg" });
-        txt = await puterChat(prompt, file);
+        txt = await puterChat(prompt, new File([blob], "snapmake.jpg", { type: "image/jpeg" }));
       } else {
         try {
           txt = await puterChat(prompt);
@@ -401,21 +381,19 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
       if (!result.steps.length && result.feasible) throw new Error("The AI didn't return any steps.");
 
       stopScanUI();
-      // Signature moment: pin what was found onto the photo before revealing the plan.
+      // Pin what was found onto the photo before revealing the plan.
       if (hasPhoto && result.spotted.length) {
-        $("#scanStatus").textContent = `Found ${result.spotted.length} thing${result.spotted.length > 1 ? "s" : ""}.`;
+        $("#scanStatus").textContent = `Found ${result.spotted.length} thing${result.spotted.length > 1 ? "s" : ""}`;
         $("#scanTags").innerHTML = tagsHTML(result.spotted);
-        await sleep(900 + result.spotted.length * 110);
+        await sleep(1100 + result.spotted.length * 90);
       }
-      state.heroImg = hasPhoto ? await thumbDataURL(state.photos[0].blob) : null;
       const record = {
         id: uid(),
         at: Date.now(),
         goal,
-        mode,
         result,
-        hero: state.heroImg,
-        thumb: hasPhoto ? await thumbDataURL(state.photos[0].blob, 160, 0.7) : null,
+        hero: hasPhoto ? await resized(state.photos[0].blob, 1100, "dataURL", 0.8) : null,
+        thumb: hasPhoto ? await resized(state.photos[0].blob, 160, "dataURL", 0.7) : null,
         done: [],
       };
       saveRecord(record);
@@ -425,90 +403,64 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
       if (errMsg(e) === "ABORTED" || state.abort?.signal.aborted) return;
       console.error(e);
       const m = errMsg(e);
-      renderError({ kind: m === "PUTER_UNAVAILABLE" ? "offline" : isAuthErr(e) ? "auth" : m === "NO_JSON" ? "format" : "generic", detail: m, goal, mode });
+      renderError({ kind: m === "PUTER_UNAVAILABLE" ? "offline" : isAuthErr(e) ? "auth" : m === "NO_JSON" ? "format" : "generic", detail: m, goal });
     }
   }
 
-  function renderError({ kind, detail, goal, mode }) {
-    const copy = {
-      auth: ["Sign in to use the free AI", "Snapmake uses Puter's free AI. It needs a one-time sign-in to a free Puter account, and the sign-in window was closed or blocked. Allow pop-ups for this site, then try again."],
-      offline: ["Couldn't reach the AI", "The free AI service didn't load. Check your connection or turn off any blocker for js.puter.com, then try again."],
-      format: ["That answer came back garbled", "The AI replied in a format Snapmake couldn't read. Trying again usually fixes it."],
-      generic: ["Something went sideways", "The AI couldn't finish this one. Try again, or type what's in the photo below to get a plan without the image."],
+  function renderError({ kind, detail, goal }) {
+    const [title, body] = {
+      auth: ["Sign in to continue", "Snapmake's AI is free through Puter. It needs a quick one-time sign-in. If nothing opened, allow pop-ups for this site and try again."],
+      offline: ["Can't reach the AI", "Check your connection, or turn off any blocker for js.puter.com, then try again."],
+      format: ["That didn't come out right", "The AI's answer was garbled. Trying again usually fixes it."],
+      generic: ["Something went wrong", "The AI couldn't finish this one. Try again, or describe what's in the photo instead."],
     }[kind];
     const v = $("#viewResult");
     v.innerHTML = `<div class="err">
-      <p class="eyebrow">Hmm</p>
-      <h2>${copy[0]}</h2>
-      <p>${copy[1]}</p>
-      <div class="btns">
-        <button class="btn btn-tomato" data-act="retry">Try again</button>
-        <button class="btn btn-ghost" data-act="home">Change photo or request</button>
+      <h1>${title}</h1>
+      <p>${body}</p>
+      <div class="row">
+        <button class="btn btn-primary" data-act="retry">Try again</button>
+        <button class="btn btn-secondary" data-act="home">Go back</button>
       </div>
-      ${state.photos.length ? `<p style="margin-top:22px">Or describe what's in the photo and skip the image:</p>
-      <textarea id="describeBox" rows="2" placeholder="e.g. 2 chicken breasts, half an onion, rice, soy sauce, a lemon"></textarea>
-      <button class="btn btn-ink" data-act="describe">Plan from my description</button>` : ""}
-      <details style="color:var(--ink-3);font-size:.8rem;margin-top:10px"><summary>Technical detail</summary>${esc(detail)}</details>
+      ${state.photos.length ? `<div class="alt-box"><p>Or type what's in the photo:</p>
+        <form class="ask" id="describeForm"><input id="describeBox" placeholder="e.g. chicken, rice, a lemon, spinach" /><button class="send" type="submit" aria-label="Go">${ICON.up}</button></form></div>` : ""}
+      <details><summary>Details</summary>${esc(detail)}</details>
     </div>`;
     v.onclick = (ev) => {
       const act = ev.target.closest("[data-act]")?.dataset.act;
-      if (act === "retry") run({ goal, mode });
+      if (act === "retry") run({ goal });
       if (act === "home") showView("viewCompose");
-      if (act === "describe") {
-        const d = $("#describeBox").value.trim();
-        if (!d) return toast("Type what's in the photo first.");
-        run({ goal, mode, described: d });
-      }
+    };
+    v.onsubmit = (ev) => {
+      if (ev.target.id !== "describeForm") return;
+      ev.preventDefault();
+      const d = $("#describeBox").value.trim();
+      if (!d) return toast("Type what's in the photo first");
+      run({ goal, described: d });
     };
     showView("viewResult");
   }
 
-  /* ---------------- result rendering ---------------- */
-  const ILLUS = {
-    cook: `<svg viewBox="0 0 200 200" aria-hidden="true"><ellipse cx="100" cy="150" rx="78" ry="14" fill="#14281e" opacity=".5"/><path d="M24 96h152c0 44-34 64-76 64S24 140 24 96z" fill="#f4efe6"/><path d="M24 96h152" stroke="#f2c94c" stroke-width="5" stroke-linecap="round"/><circle cx="72" cy="88" r="12" fill="#e4532c"/><circle cx="104" cy="84" r="10" fill="#f2c94c"/><circle cx="132" cy="90" r="9" fill="#a9c9ab"/><path d="M78 60c-6-10 6-16 0-28M100 56c-6-10 6-16 0-28M122 60c-6-10 6-16 0-28" stroke="#f4efe6" stroke-width="4" fill="none" stroke-linecap="round" opacity=".55"/></svg>`,
-    build: `<svg viewBox="0 0 200 200" aria-hidden="true"><rect x="40" y="40" width="120" height="130" rx="8" fill="#f4efe6"/><rect x="52" y="52" width="96" height="50" rx="4" fill="none" stroke="#1f3b2d" stroke-width="4"/><rect x="52" y="110" width="96" height="48" rx="4" fill="none" stroke="#1f3b2d" stroke-width="4"/><circle cx="138" cy="78" r="5" fill="#e4532c"/><circle cx="138" cy="134" r="5" fill="#e4532c"/><path d="M150 30l28 28-10 10-28-28z" fill="#f2c94c"/><path d="M140 40l-50 50" stroke="#f2c94c" stroke-width="8" stroke-linecap="round"/></svg>`,
-    craft: `<svg viewBox="0 0 200 200" aria-hidden="true"><ellipse cx="100" cy="104" rx="64" ry="56" fill="none" stroke="#f4efe6" stroke-width="3" stroke-dasharray="2 8" stroke-linecap="round"/>${Array.from({ length: 14 }, (_, i) => { const a = (i / 14) * Math.PI * 2; return `<circle cx="${100 + Math.cos(a) * 64}" cy="${104 + Math.sin(a) * 56}" r="${i % 3 ? 9 : 12}" fill="${["#e4532c", "#f2c94c", "#a9c9ab", "#f4efe6"][i % 4]}"/>`; }).join("")}<path d="M100 48l6 14 15 1-12 9 4 15-13-8-13 8 4-15-12-9 15-1z" fill="#f2c94c"/></svg>`,
-    care: `<svg viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="122" r="40" fill="#f4efe6"/><circle cx="58" cy="78" r="16" fill="#f4efe6"/><circle cx="86" cy="58" r="16" fill="#f4efe6"/><circle cx="118" cy="58" r="16" fill="#f4efe6"/><circle cx="144" cy="78" r="16" fill="#f4efe6"/><path d="M100 138c-14-10-22-18-22-27 0-7 6-12 12-12 4 0 8 2 10 6 2-4 6-6 10-6 6 0 12 5 12 12 0 9-8 17-22 27z" fill="#e4532c"/></svg>`,
-  };
-  ILLUS.other = ILLUS.craft;
+  /* ---------------- result ---------------- */
+  const KICKER = { cook: "Recipe", build: "Build & fix", craft: "Craft", care: "Care guide" };
+  const LEVEL = ["", "Easy", "Easy", "Medium", "Tricky", "Advanced"];
 
-  function titleHTML(r) {
-    const t = esc(r.title);
-    const w = r.title_emphasis && esc(r.title_emphasis);
-    if (w && t.includes(w)) return t.replace(w, `<em>${w}</em>`);
-    return t;
+  function hints(s) {
+    return `${s.tip ? `<div class="hint"><b>Tip</b><span>${esc(s.tip)}</span></div>` : ""}${s.warning ? `<div class="hint warn"><b>Careful</b><span>${esc(s.warning)}</span></div>` : ""}`;
   }
-
-  function stepCallouts(s) {
-    return `${s.tip ? `<div class="callout tip"><b>Tip</b><span>${esc(s.tip)}</span></div>` : ""}${s.warning ? `<div class="callout warn"><b>Careful</b><span>${esc(s.warning)}</span></div>` : ""}`;
-  }
-
-  const ICON = {
-    timer: `<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 9v4l2.5 2M9 2h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
-    check: `<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    play: `<svg viewBox="0 0 24 24"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>`,
-    share: `<svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 13v7h14v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    print: `<svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-7h16v7h-3M7 14h10v7H7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`,
-    plus: `<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`,
-    alert: `<svg viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`,
-    info: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`,
-  };
 
   function timerLabel(i) {
     const t = state.timers[i];
-    const s = state.result.steps[i];
-    if (t?.ringing) return `${ICON.timer} Time's up! Tap to stop`;
-    if (t && t.id) return `${ICON.timer} ${fmt(t.left)} · tap to stop`;
-    return `${ICON.timer} Start ${s.minutes} min timer`;
+    if (t?.ringing) return `${ICON.clock}Time's up · stop`;
+    if (t?.id) return `${ICON.clock}${fmt(t.left)}`;
+    return `${ICON.clock}${state.result.steps[i].minutes} min timer`;
   }
-  const fmt = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 
   function openRecord(rec) {
-    Object.values(state.timers).forEach((t) => clearInterval(t.id));
+    Object.values(state.timers).forEach((t) => { clearInterval(t.id); clearInterval(t.ringId); });
     state.timers = {};
     state.record = rec;
     state.result = rec.result;
-    state.heroImg = rec.hero;
     state.chat = [];
     renderResult();
     showView("viewResult");
@@ -517,102 +469,64 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
   function renderResult() {
     const r = state.result, rec = state.record;
     const done = new Set(rec.done || []);
+    const mats = new Set(rec.mats || []);
+    const toBuy = r.materials.filter((m) => m.have === false).length;
     const v = $("#viewResult");
-    const have = r.materials.filter((m) => m.have !== false).length;
+    v.onclick = v.onsubmit = null;
 
     v.innerHTML = `
-      <article class="r-hero">
-        <div class="r-hero-copy">
-          <p class="eyebrow">${r.feasible ? esc(labelFor(r.category)) : "Not quite possible"}</p>
-          <h1 class="r-title">${titleHTML(r)}</h1>
-          ${r.summary ? `<p class="r-summary">${esc(r.summary)}</p>` : ""}
-          ${r.feasible ? `<div class="r-stats">
-            ${r.time ? `<div class="r-stat"><b>${esc(r.time)}</b><span>Total time</span></div>` : ""}
-            <div class="r-stat"><b><span class="dots" aria-label="Difficulty ${r.difficulty} of 5">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= r.difficulty ? "on" : ""}"></i>`).join("")}</span></b><span>${["", "Easy", "Easy-ish", "Medium", "Tricky", "Expert"][r.difficulty]}</span></div>
-            ${r.yield ? `<div class="r-stat"><b>${esc(r.yield)}</b><span>Makes</span></div>` : ""}
-            <div class="r-stat"><b>${r.steps.length}</b><span>Steps</span></div>
-          </div>` : ""}
-        </div>
-        ${state.heroImg ? `<div class="r-photo"><img src="${state.heroImg}" alt="Your photo" /><div class="scan-tags">${tagsHTML(r.spotted)}</div></div>` : `<div class="r-photo illus">${ILLUS[r.category] || ILLUS.other}</div>`}
-      </article>
+      <button class="back" data-act="new">${ICON.back}New</button>
+      ${rec.hero ? `<div class="r-media"><img src="${rec.hero}" alt="Your photo" /><div class="tags">${tagsHTML(r.spotted)}</div></div>` : ""}
+      <p class="r-kicker">${r.feasible ? esc(KICKER[r.category] || "Plan") : "Not quite possible"}</p>
+      <h1 class="r-title">${esc(r.title)}</h1>
+      ${r.summary ? `<p class="r-summary">${esc(r.summary)}</p>` : ""}
+      ${r.feasible ? `<ul class="meta">
+        ${r.time ? `<li>${ICON.clock}${esc(r.time)}</li>` : ""}
+        <li>${ICON.gauge}${LEVEL[r.difficulty]}</li>
+        ${r.yield ? `<li>${ICON.yield}${esc(r.yield)}</li>` : ""}
+        <li>${ICON.list}${r.steps.length} steps</li>
+      </ul>` : ""}
 
-      <div class="r-actions">
-        ${r.feasible && r.steps.length ? `<button class="btn btn-tomato btn-xl" data-act="focus">${ICON.play}<span>Start step-by-step</span></button>` : ""}
-        <button class="btn btn-ghost" data-act="share">${ICON.share}Share</button>
-        <button class="btn btn-ghost" data-act="print">${ICON.print}Print</button>
-        <button class="btn btn-ghost" data-act="new">${ICON.plus}New make</button>
+      <div class="cta-row">
+        ${r.feasible && r.steps.length ? `<button class="btn btn-primary" data-act="focus">${ICON.play}${done.size && done.size < r.steps.length ? "Continue" : "Start"}</button>` : ""}
+        <button class="btn btn-icon" data-act="share" aria-label="Share">${ICON.share}</button>
+        <button class="btn btn-icon" data-act="print" aria-label="Print">${ICON.print}</button>
       </div>
 
-      ${r.alert ? `<div class="note ${r.alert.kind === "info" ? "ok" : ""}">${r.alert.kind === "info" ? ICON.info : ICON.alert}<div><b>${esc(r.alert.title || (r.alert.kind === "info" ? "Good to know" : "Heads up"))}</b>${esc(r.alert.text)}</div></div>` : ""}
+      ${r.alert ? `<div class="notice ${r.alert.kind === "info" ? "info" : ""}">${r.alert.kind === "info" ? ICON.info : ICON.alert}<div><b>${esc(r.alert.title || "Heads up")}.</b> ${esc(r.alert.text)}</div></div>` : ""}
 
-      ${r.spotted.length ? `<div class="r-spotted"><h3>Spotted</h3>${r.spotted.map((s) => `<span class="pill">${esc(s.label)}</span>`).join("")}</div>` : ""}
+      ${r.feasible && r.materials.length ? `<section class="section">
+        <div class="section-head"><h2>You'll need</h2><span>${toBuy ? `${toBuy} to get` : "You have everything"}</span></div>
+        <ul class="list">${r.materials.map((m, i) => `<li><label class="check"><input type="checkbox" data-mat="${i}" ${mats.has(i) ? "checked" : ""} /><span class="name">${esc(m.name)}${m.have === false ? `<span class="buy">Get</span>` : ""}${m.note ? `<small>${esc(m.note)}</small>` : ""}</span><span class="amt">${esc(m.amount || "")}</span></label></li>`).join("")}</ul>
+        ${r.tools.length ? `<p class="tools"><b>Tools:</b> ${r.tools.map(esc).join(", ")}</p>` : ""}
+      </section>` : ""}
 
-      ${r.feasible && r.steps.length ? `
-      <div class="r-body">
-        <aside class="r-side">
-          ${r.materials.length ? `<section class="panel">
-            <h3>What you need <small>${have}/${r.materials.length} on hand</small></h3>
-            <p class="sub">Tick things off as you gather them.</p>
-            <ul class="checklist">${r.materials.map((m, i) => `<li><label><input type="checkbox" data-mat="${i}" ${rec.mats?.includes(i) ? "checked" : ""} /><span class="it">${esc(m.name)}<span class="badge ${m.have === false ? "need" : "have"}">${m.have === false ? "Get" : "Have"}</span>${m.note ? `<small>${esc(m.note)}</small>` : ""}</span><span class="amt">${esc(m.amount || "")}</span></label></li>`).join("")}</ul>
-          </section>` : ""}
-          ${r.tools.length ? `<section class="panel"><h3>Tools</h3><p class="sub">Have these within reach.</p><div class="toolrow">${r.tools.map((t) => `<span class="pill">${esc(t)}</span>`).join("")}</div></section>` : ""}
-        </aside>
+      ${r.feasible && r.steps.length ? `<section class="section">
+        <div class="section-head"><h2>Steps</h2><span class="progress-mini"><i><b id="progFill"></b></i><em id="progText" style="font-style:normal"></em></span></div>
+        <ol class="steps">${r.steps.map((s, i) => `
+          <li class="step ${done.has(i) ? "done" : ""}" data-step="${i}">
+            <button class="step-num" data-done="${i}" aria-label="Mark step ${i + 1} done" aria-pressed="${done.has(i)}">${done.has(i) ? ICON.check : i + 1}</button>
+            <div>
+              <h3>${esc(s.title)}</h3>
+              ${s.detail ? `<p>${esc(s.detail)}</p>` : ""}
+              ${hints(s)}
+              ${Number(s.minutes) > 0 ? `<button class="timer" data-timer="${i}">${timerLabel(i)}</button>` : ""}
+            </div>
+          </li>`).join("")}</ol>
+      </section>` : ""}
 
-        <div class="r-main">
-          <div class="steps-head">
-            <h2>The steps</h2>
-            <div class="progress"><div class="track"><div class="fill" id="progFill"></div></div><span id="progText"></span></div>
-          </div>
-          <ol class="steps">
-            ${r.steps.map((s, i) => `
-              <li class="step ${done.has(i) ? "done" : ""}" data-step="${i}">
-                <div class="step-n">${String(i + 1).padStart(2, "0")}</div>
-                <div class="step-main">
-                  <h4>${esc(s.title)}</h4>
-                  ${s.detail ? `<p>${esc(s.detail)}</p>` : ""}
-                  ${s.tip || s.warning ? `<div class="step-extras">${stepCallouts(s)}</div>` : ""}
-                  <div class="step-tools">
-                    <button class="mini done-btn" data-done="${i}" aria-pressed="${done.has(i)}">${ICON.check}${done.has(i) ? "Done" : "Mark done"}</button>
-                    ${Number(s.minutes) > 0 ? `<button class="mini timer" data-timer="${i}">${timerLabel(i)}</button>` : ""}
-                  </div>
-                </div>
-              </li>`).join("")}
-          </ol>
-          ${r.finish.length ? `<section class="finish"><p class="eyebrow">To finish</p><h3>And that's it. <em>Nicely done.</em></h3><ul>${r.finish.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></section>` : ""}
-          ${altsHTML(r)}
-          ${chatHTML()}
-        </div>
-      </div>` : `${altsHTML(r)}${chatHTML()}`}
+      ${r.finish.length ? `<section class="section"><div class="section-head"><h2>When you're done</h2></div><ul class="plain">${r.finish.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></section>` : ""}
+
+      ${r.alternatives.length ? `<section class="section" id="ideasSection"><div class="section-head"><h2>${r.feasible ? "Other ideas" : "Try instead"}</h2></div>
+        <ul class="list">${r.alternatives.map((a, i) => `<li><button class="idea" data-alt="${i}"><span>${esc(a.title)}${a.why ? `<small>${esc(a.why)}</small>` : ""}</span>${ICON.arrow}</button></li>`).join("")}</ul></section>` : ""}
+
+      <section class="section" id="askSection"><div class="section-head"><h2>Questions?</h2></div>
+        <div class="chat-log" id="chatLog"></div>
+        <form class="ask" id="chatForm"><input id="chatInput" placeholder="e.g. What can I use instead of butter?" /><button class="send" type="submit" aria-label="Ask">${ICON.up}</button></form>
+      </section>
     `;
     updateProgress();
-    revealSteps();
     renderChat();
-  }
-
-  function altsHTML(r) {
-    if (!r.alternatives.length) return "";
-    return `<section class="finish"><p class="eyebrow">${r.feasible ? "Or try" : "You could make"}</p><h3>Other ideas from the <em>same stuff</em></h3>
-      <div class="alts">${r.alternatives.map((a, i) => `<button class="alt" data-alt="${i}"><b>${esc(a.title)}</b>${a.why ? `<span>${esc(a.why)}</span>` : ""}<i>Make this instead →</i></button>`).join("")}</div></section>`;
-  }
-
-  function chatHTML() {
-    return `<section class="panel chat"><h3>Got a question?</h3><p class="sub">Ask about swaps, sizes, or what to do if something goes wrong.</p>
-      <div class="chat-log" id="chatLog"></div>
-      <form class="chat-form" id="chatForm"><input id="chatInput" placeholder="e.g. What can I use instead of butter?" autocomplete="off" /><button class="btn btn-ink" type="submit">Ask</button></form></section>`;
-  }
-
-  function labelFor(c) {
-    return { cook: "Recipe", build: "Build & fix", craft: "Craft project", care: "Care guide" }[c] || "Your plan";
-  }
-
-  function revealSteps() {
-    const steps = $$(".step");
-    if (!("IntersectionObserver" in window)) return steps.forEach((s) => s.classList.add("in"));
-    const io = new IntersectionObserver(
-      (ents) => ents.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }),
-      { rootMargin: "0px 0px -8% 0px" }
-    );
-    steps.forEach((s, i) => { s.style.transitionDelay = `${Math.min(i, 4) * 70}ms`; io.observe(s); });
   }
 
   function updateProgress() {
@@ -620,7 +534,7 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
     if (!fill) return;
     const n = state.result.steps.length, d = (state.record.done || []).length;
     fill.style.width = `${(d / n) * 100}%`;
-    $("#progText").textContent = `${d} of ${n} done`;
+    $("#progText").textContent = `${d}/${n}`;
   }
 
   function toggleDone(i, force) {
@@ -633,9 +547,9 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
     const li = $(`.step[data-step="${i}"]`);
     if (li) {
       li.classList.toggle("done", on);
-      const b = $(".done-btn", li);
+      const b = $(".step-num", li);
       b.setAttribute("aria-pressed", on);
-      b.innerHTML = `${ICON.check}${on ? "Done" : "Mark done"}`;
+      b.innerHTML = on ? ICON.check : i + 1;
     }
     updateProgress();
   }
@@ -647,7 +561,6 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
       audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
       [0, 0.25, 0.5].forEach((t) => {
         const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-        o.type = "sine";
         o.frequency.value = 880;
         g.gain.setValueAtTime(0.0001, audioCtx.currentTime + t);
         g.gain.exponentialRampToValueAtTime(0.3, audioCtx.currentTime + t + 0.02);
@@ -677,11 +590,11 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
       delete state.timers[i];
       return paintTimer(i);
     }
-    audioCtx ||= new (window.AudioContext || window.webkitAudioContext)(); // unlock audio inside the tap
+    try { audioCtx ||= new (window.AudioContext || window.webkitAudioContext)(); } catch {} // unlock audio inside the tap
     if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
     const total = Math.round(Number(state.result.steps[i].minutes) * 60);
     const end = Date.now() + total * 1000;
-    const nt = { total, left: total };
+    const nt = { left: total };
     nt.id = setInterval(() => {
       nt.left = Math.max(0, Math.round((end - Date.now()) / 1000));
       if (nt.left === 0) {
@@ -700,24 +613,23 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
     paintTimer(i);
   }
 
-  /* ---------------- focus mode ---------------- */
-  function openFocus(start) {
-    const n = state.result.steps.length;
+  /* ---------------- step-by-step mode ---------------- */
+  function openFocus() {
     const firstUndone = state.result.steps.findIndex((_, i) => !(state.record.done || []).includes(i));
-    state.focusIndex = start ?? (firstUndone < 0 ? 0 : firstUndone);
+    state.focusIndex = firstUndone < 0 ? 0 : firstUndone;
     $("#focus").hidden = false;
     document.body.style.overflow = "hidden";
     renderFocus();
     if ("wakeLock" in navigator) navigator.wakeLock.request("screen").then((l) => (state.wakeLock = l)).catch(() => {});
     $("#focusNext").focus();
-    void n;
   }
   function closeFocus() {
     $("#focus").hidden = true;
     document.body.style.overflow = "";
-    speechSynthesis?.cancel();
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
     state.wakeLock?.release().catch(() => {});
     state.wakeLock = null;
+    if (state.result) renderResult();
   }
   function renderFocus(dir = 1) {
     const steps = state.result.steps, n = steps.length, i = state.focusIndex;
@@ -725,28 +637,22 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
     $("#focusBar").style.width = `${(Math.min(i, n) / n) * 100}%`;
     $("#focusPrev").disabled = i === 0;
     if (i >= n) {
-      body.innerHTML = `<div class="fx focus-done">
-        <svg class="burst" viewBox="0 0 120 120" aria-hidden="true">${Array.from({ length: 12 }, (_, k) => `<line x1="60" y1="60" x2="${60 + Math.cos((k / 12) * 6.283) * 56}" y2="${60 + Math.sin((k / 12) * 6.283) * 56}" stroke="${k % 2 ? "#f2c94c" : "#e4532c"}" stroke-width="5" stroke-linecap="round" stroke-dasharray="14 60" stroke-dashoffset="-30"/>`).join("")}<circle cx="60" cy="60" r="18" fill="#f2c94c"/></svg>
-        <p class="focus-count">All ${n} steps</p>
-        <h2>You made it. <em>Enjoy.</em></h2>
-        ${state.result.finish.length ? `<p class="fdetail">${esc(state.result.finish[0])}</p>` : ""}
-      </div>`;
-      $("#focusNext").textContent = "Finish";
+      body.innerHTML = `<div class="fx f-done"><div class="badge">${ICON.check}</div><h2>All done</h2>${state.result.finish.length ? `<p class="f-detail">${esc(state.result.finish[0])}</p>` : ""}</div>`;
+      $("#focusNext").textContent = "Close";
       steps.forEach((_, k) => toggleDone(k, true));
-      speak(`You made it! ${state.result.finish[0] || ""}`);
+      speak(`All done! ${state.result.finish[0] || ""}`);
       return;
     }
     const s = steps[i];
     body.innerHTML = `<div class="fx ${dir < 0 ? "back" : ""}">
-      <p class="focus-count">Step ${i + 1} of ${n}</p>
-      <div class="focus-n" aria-hidden="true">${String(i + 1).padStart(2, "0")}</div>
+      <p class="f-count">Step ${i + 1} of ${n}</p>
       <h2>${esc(s.title)}</h2>
-      ${s.detail ? `<p class="fdetail">${esc(s.detail)}</p>` : ""}
-      ${stepCallouts(s)}
-      ${Number(s.minutes) > 0 ? `<button class="mini timer" data-timer="${i}">${timerLabel(i)}</button>` : ""}
+      ${s.detail ? `<p class="f-detail">${esc(s.detail)}</p>` : ""}
+      ${hints(s)}
+      ${Number(s.minutes) > 0 ? `<button class="timer" data-timer="${i}">${timerLabel(i)}</button>` : ""}
     </div>`;
     paintTimer(i);
-    $("#focusNext").textContent = i === n - 1 ? "Finish" : "Next step";
+    $("#focusNext").textContent = i === n - 1 ? "Finish" : "Next";
     speak(`Step ${i + 1}. ${s.title}. ${s.detail || ""} ${s.warning ? "Careful: " + s.warning : ""}`);
   }
   function focusGo(d) {
@@ -759,12 +665,10 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
   function speak(text) {
     if (!state.speak || !("speechSynthesis" in window)) return;
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1;
-    speechSynthesis.speak(u);
+    speechSynthesis.speak(new SpeechSynthesisUtterance(text));
   }
 
-  /* ---------------- chat ---------------- */
+  /* ---------------- questions ---------------- */
   function renderChat() {
     const log = $("#chatLog");
     if (!log) return;
@@ -779,9 +683,9 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
     renderChat();
     const msgs = [{ role: "system", content: ctx }, ...state.chat.filter((m) => m !== reply).map(({ role, content }) => ({ role, content }))];
     try {
-      if (params.has("mock")) {
-        await sleep(600);
-        reply.content = "Olive oil works well: use about three quarters as much, and add a pinch of salt.";
+      if (params.has("mock") || state.record.id === "example") {
+        await sleep(700);
+        reply.content = "Olive oil works. Use about three quarters as much, and add a pinch of salt.";
       } else {
         try {
           const stream = await puterChat(msgs, null, { stream: true });
@@ -791,17 +695,17 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
               renderChat();
             }
           }
-        } catch {
+        } catch (e) {
+          if (isAuthErr(e)) throw e;
           reply.content = await pollinationsText(`${ctx}\n\nConversation:\n${msgs.slice(1).map((m) => `${m.role}: ${m.content}`).join("\n")}\nassistant:`);
         }
       }
       if (!reply.content.trim()) reply.content = "Sorry, I didn't catch that. Try asking another way.";
     } catch (e) {
-      reply.content = "I couldn't reach the AI just now. " + (isAuthErr(e) ? "Please sign in to Puter and try again." : "Try again in a moment.");
+      reply.content = isAuthErr(e) ? "Please sign in to Puter and try again." : "I couldn't reach the AI just now. Try again in a moment.";
     }
     reply.typing = false;
     renderChat();
-    $("#chatLog")?.lastElementChild?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
   /* ---------------- saving ---------------- */
@@ -813,6 +717,7 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
     }
   }
   function saveRecord(rec) {
+    if (rec.id === "example") return;
     let all = loadSaved().filter((r) => r.id !== rec.id);
     all.unshift(rec);
     all = all.slice(0, 30);
@@ -821,7 +726,7 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
         localStorage.setItem(STORE_KEY, JSON.stringify(all));
         break;
       } catch {
-        // Storage full: drop the oldest hero images first, then whole records.
+        // Storage full: drop the oldest photos first, then whole records.
         const withHero = [...all].reverse().find((r) => r.hero && r.id !== rec.id);
         if (withHero) withHero.hero = null;
         else if (all.length > 1) all.pop();
@@ -838,14 +743,14 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
   function openDrawer() {
     const all = loadSaved();
     $("#savedList").innerHTML = all.length
-      ? all.map((r) => `<li data-open="${r.id}">${r.thumb ? `<img class="th" src="${r.thumb}" alt="" />` : `<div class="th" style="display:grid;place-items:center">${(ILLUS[r.result.category] || ILLUS.other).replace("<svg", '<svg width="44"')}</div>`}<div><b>${esc(r.result.title)}</b><span>${new Date(r.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${r.result.steps.length} steps${r.done?.length ? ` · ${r.done.length} done` : ""}</span></div><button class="del" data-del="${r.id}" aria-label="Delete">✕</button></li>`).join("")
-      : `<li class="empty-saved" style="display:block;cursor:default;border:0;background:none">Your makes will show up here automatically.</li>`;
+      ? all.map((r) => `<li data-open="${r.id}">${r.thumb ? `<img class="th" src="${r.thumb}" alt="" />` : `<span class="th">${ICON.doc}</span>`}<div class="t"><b>${esc(r.result.title)}</b><span>${new Date(r.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${r.done?.length || 0}/${r.result.steps.length} steps</span></div><button class="del" data-del="${r.id}" aria-label="Delete">${ICON.x}</button></li>`).join("")
+      : `<li class="empty">Your plans will show up here.</li>`;
     $("#drawer").hidden = false;
   }
 
   /* ---------------- share ---------------- */
   function asText(r) {
-    return `${r.title}\n${r.summary}\n\nYou need:\n${r.materials.map((m) => `- ${m.amount ? m.amount + " " : ""}${m.name}`).join("\n")}\n\nSteps:\n${r.steps.map((s, i) => `${i + 1}. ${s.title}: ${s.detail}`).join("\n")}\n\nMade with Snapmake: ${location.origin}${location.pathname}`;
+    return `${r.title}\n${r.summary}\n\nYou'll need:\n${r.materials.map((m) => `- ${m.amount ? m.amount + " " : ""}${m.name}`).join("\n")}\n\nSteps:\n${r.steps.map((s, i) => `${i + 1}. ${s.title}: ${s.detail}`).join("\n")}\n\nMade with Snapmake: ${location.origin}${location.pathname}`;
   }
   async function share() {
     const text = asText(state.result);
@@ -859,27 +764,22 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
     }
     try {
       await navigator.clipboard.writeText(text);
-      toast("Copied the plan. Paste it anywhere.");
+      toast("Copied to clipboard");
     } catch {
       toast("Couldn't copy. Try Print instead.");
     }
   }
 
   /* ---------------- wiring ---------------- */
-  function renderChips(mode) {
-    $("#chips").innerHTML = CHIPS[mode].map((c) => `<button type="button" class="chip" role="listitem">${esc(c)}</button>`).join("");
-  }
-
   function init() {
-    renderChips("auto");
+    $("#chips").innerHTML = CHIPS.map((c) => `<button type="button" class="chip">${esc(c)}</button>`).join("");
     paintSavedCount();
+    updateSend();
 
-    $("#cameraBtn").onclick = () => $("#cameraInput").click();
-    $("#uploadBtn").onclick = () => $("#fileInput").click();
+    const pick = () => $("#fileInput").click();
     $("#fileInput").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
-    $("#cameraInput").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
-
-    $("#thumbs").addEventListener("click", (e) => {
+    const tray = $("#tray");
+    tray.addEventListener("click", (e) => {
       const rm = e.target.closest("[data-rm]");
       if (rm) {
         const i = +rm.dataset.rm;
@@ -887,11 +787,11 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
         state.photos.splice(i, 1);
         return renderThumbs();
       }
-      if (e.target.closest("[data-add]")) $("#fileInput").click();
+      if (e.target.closest("[data-add]") || !state.photos.length) pick();
     });
-    $("#thumbs").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("[data-add]")) $("#fileInput").click(); });
-
-    const tray = $("#tray");
+    tray.addEventListener("keydown", (e) => {
+      if ((e.key === "Enter" || e.key === " ") && (e.target === tray || e.target.matches("[data-add]"))) { e.preventDefault(); pick(); }
+    });
     ["dragenter", "dragover"].forEach((t) => tray.addEventListener(t, (e) => { e.preventDefault(); tray.classList.add("is-drag"); }));
     ["dragleave", "drop"].forEach((t) => tray.addEventListener(t, (e) => { e.preventDefault(); tray.classList.remove("is-drag"); }));
     tray.addEventListener("drop", (e) => addFiles(e.dataTransfer.files));
@@ -900,25 +800,36 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
       if (files.length && $("#viewCompose").classList.contains("is-active")) addFiles(files);
     });
 
+    const goal = $("#goal");
+    const grow = () => {
+      goal.style.height = "auto";
+      goal.style.height = goal.scrollHeight + "px";
+      goal.style.overflowY = goal.scrollHeight > 160 ? "auto" : "hidden";
+      updateSend();
+    };
+    goal.addEventListener("input", grow);
+    goal.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#composer").requestSubmit(); }
+    });
     $("#chips").onclick = (e) => {
       const c = e.target.closest(".chip");
       if (!c) return;
-      $("#goal").value = c.textContent;
-      $("#goal").focus();
+      goal.value = c.textContent;
+      grow();
+      goal.focus();
     };
-    $("#modes").onchange = (e) => renderChips(e.target.value);
-    $("#goal").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("#composer").requestSubmit(); });
     $("#composer").onsubmit = (e) => { e.preventDefault(); run(); };
-    $("#exampleBtn").onclick = () => openRecord({ id: "example", at: Date.now(), goal: "Dinner for two", mode: "cook", result: normalize(MOCK_RESULT), hero: null, thumb: null, done: [] });
+    $("#exampleBtn").onclick = () => openRecord({ id: "example", at: Date.now(), goal: "Dinner for two", result: normalize(EXAMPLE), hero: null, thumb: null, done: [] });
     $("#cancelBtn").onclick = () => { state.abort?.abort(); stopScanUI(); showView("viewCompose"); };
 
-    $("#viewResult").addEventListener("click", (e) => {
-      if (!state.result) return;
+    const result = $("#viewResult");
+    result.addEventListener("click", (e) => {
+      if (!state.result || !e.target.closest(".back, .cta-row, .step, .idea")) return;
       const act = e.target.closest("[data-act]")?.dataset.act;
       if (act === "focus") openFocus();
       if (act === "share") share();
       if (act === "print") window.print();
-      if (act === "new") { showView("viewCompose"); $("#goal").focus(); }
+      if (act === "new") showView("viewCompose");
       const d = e.target.closest("[data-done]");
       if (d) toggleDone(+d.dataset.done);
       const t = e.target.closest("[data-timer]");
@@ -926,19 +837,19 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
       const a = e.target.closest("[data-alt]");
       if (a) {
         const alt = state.result.alternatives[+a.dataset.alt];
-        $("#goal").value = alt.title;
-        run({ goal: alt.title, mode: state.record.mode });
+        goal.value = alt.title;
+        run({ goal: alt.title });
       }
     });
-    $("#viewResult").addEventListener("change", (e) => {
+    result.addEventListener("change", (e) => {
       const m = e.target.closest("[data-mat]");
-      if (!m) return;
+      if (!m || !state.record) return;
       const set = new Set(state.record.mats || []);
       m.checked ? set.add(+m.dataset.mat) : set.delete(+m.dataset.mat);
       state.record.mats = [...set];
       saveRecord(state.record);
     });
-    $("#viewResult").addEventListener("submit", (e) => {
+    result.addEventListener("submit", (e) => {
       if (e.target.id !== "chatForm") return;
       e.preventDefault();
       const q = $("#chatInput").value.trim();
@@ -947,7 +858,7 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
       ask(q);
     });
 
-    // focus mode
+    // step-by-step mode
     $("#focusClose").onclick = closeFocus;
     $("#focusNext").onclick = () => focusGo(1);
     $("#focusPrev").onclick = () => focusGo(-1);
@@ -955,15 +866,16 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
       state.speak = !state.speak;
       e.currentTarget.setAttribute("aria-pressed", state.speak);
       if (state.speak) renderFocus(0);
-      else speechSynthesis?.cancel();
-      toast(state.speak ? "Reading steps aloud" : "Read-aloud off");
+      else if ("speechSynthesis" in window) speechSynthesis.cancel();
+      toast(state.speak ? "Reading steps aloud" : "Read aloud off");
     };
     $("#focus").addEventListener("click", (e) => { const t = e.target.closest("[data-timer]"); if (t) toggleTimer(+t.dataset.timer); });
     document.addEventListener("keydown", (e) => {
-      if ($("#focus").hidden) return;
-      if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); focusGo(1); }
-      if (e.key === "ArrowLeft") focusGo(-1);
-      if (e.key === "Escape") closeFocus();
+      if (!$("#focus").hidden) {
+        if (e.key === "ArrowRight") { e.preventDefault(); focusGo(1); }
+        if (e.key === "ArrowLeft") focusGo(-1);
+        if (e.key === "Escape") closeFocus();
+      } else if (e.key === "Escape" && !$("#drawer").hidden) $("#drawer").hidden = true;
     });
     let sx = null;
     $("#focusBody").addEventListener("touchstart", (e) => (sx = e.touches[0].clientX), { passive: true });
@@ -977,13 +889,12 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
       if (!document.hidden && !$("#focus").hidden && "wakeLock" in navigator) navigator.wakeLock.request("screen").then((l) => (state.wakeLock = l)).catch(() => {});
     });
 
-    // drawer
+    // saved
     $("#historyBtn").onclick = openDrawer;
     $("#drawer").addEventListener("click", (e) => {
       if (e.target.closest("[data-close]")) return ($("#drawer").hidden = true);
       const del = e.target.closest("[data-del]");
       if (del) {
-        e.stopPropagation();
         localStorage.setItem(STORE_KEY, JSON.stringify(loadSaved().filter((r) => r.id !== del.dataset.del)));
         paintSavedCount();
         return openDrawer();
@@ -995,49 +906,47 @@ Reply with ONLY a JSON object (no markdown fences, no prose) in exactly this sha
         if (rec) openRecord(rec);
       }
     });
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#drawer").hidden) $("#drawer").hidden = true; });
 
     if (window.puter) puter.quiet = true;
     if (params.has("demo")) $("#exampleBtn").click();
     if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
   }
 
-  /* ---------------- example / mock result ---------------- */
-  const MOCK_RESULT = {
+  /* ---------------- example plan ---------------- */
+  const EXAMPLE = {
     feasible: true,
     category: "cook",
-    title: "Lemony chicken & crispy rice bowls",
-    title_emphasis: "crispy",
-    summary: "Your chicken, leftover rice, and that half lemon make a bright 25-minute dinner for two. The rice crisps in the same pan the chicken cooks in.",
-    spotted: [{ label: "Chicken breasts", x: 30, y: 40 }, { label: "Cooked rice", x: 62, y: 30 }, { label: "Lemon", x: 70, y: 66 }, { label: "Spinach", x: 22, y: 72 }, { label: "Garlic", x: 48, y: 58 }],
+    title: "Lemon chicken & crispy rice",
+    summary: "Your chicken, leftover rice, and half a lemon make a bright 25-minute dinner for two. The rice crisps in the same pan.",
+    spotted: [{ label: "Chicken", x: 30, y: 40 }, { label: "Rice", x: 62, y: 30 }, { label: "Lemon", x: 70, y: 66 }, { label: "Spinach", x: 24, y: 72 }, { label: "Garlic", x: 48, y: 56 }],
     time: "25 min",
     difficulty: 2,
     yield: "Serves 2",
-    alert: { kind: "info", title: "Food safety", text: "Cook chicken to 165°F (74°C) in the thickest part. Leftover rice should be under 2 days old and kept cold." },
+    alert: { kind: "info", title: "Food safety", text: "Cook chicken to 165°F (74°C) in the thickest part. Use rice that's under 2 days old and kept cold." },
     materials: [
-      { name: "Chicken breasts", amount: "2 (about 1 lb)", have: true },
+      { name: "Chicken breasts", amount: "2", have: true },
       { name: "Cooked rice, cold", amount: "2 cups", have: true, note: "Day-old rice crisps best" },
       { name: "Lemon", amount: "½", have: true },
       { name: "Garlic", amount: "2 cloves", have: true },
       { name: "Baby spinach", amount: "2 handfuls", have: true },
       { name: "Olive oil", amount: "3 tbsp", have: true },
       { name: "Soy sauce", amount: "1 tbsp", have: false, note: "Or a pinch more salt" },
-      { name: "Salt & pepper", amount: "to taste", have: true },
+      { name: "Salt & pepper", amount: "To taste", have: true },
     ],
-    tools: ["Large non-stick or cast-iron pan", "Cutting board", "Sharp knife", "Meat thermometer (optional)"],
+    tools: ["Large non-stick pan", "Cutting board", "Knife"],
     steps: [
-      { title: "Prep the chicken", detail: "Slice each breast in half horizontally so they're about ½ inch thick. Pat very dry and season both sides with salt and pepper.", minutes: null, tip: "Dry chicken browns; wet chicken steams.", warning: "" },
-      { title: "Sear until golden", detail: "Heat 1½ tbsp oil over medium-high. Lay the chicken in and leave it alone for 5 minutes until deep golden, then flip.", minutes: 5, tip: "", warning: "Oil can spit. Lay chicken away from you." },
-      { title: "Finish with lemon & garlic", detail: "Cook the second side 4 minutes, add minced garlic for the last minute, then squeeze over half the lemon. Rest on a board.", minutes: 4, tip: "", warning: "Check it's 165°F (74°C) inside before resting." },
-      { title: "Crisp the rice", detail: "Add the rest of the oil to the same pan. Press the rice into a flat layer and don't stir for 6 minutes, until the bottom is crackly and golden.", minutes: 6, tip: "Listen for a steady crackle. That's the crust forming.", warning: "" },
-      { title: "Wilt the spinach", detail: "Toss the spinach and soy sauce through the rice for about 1 minute, just until the leaves collapse.", minutes: 1, tip: "", warning: "" },
-      { title: "Slice and serve", detail: "Slice the chicken, pile it on the rice, and spoon over any pan juices. Finish with a last squeeze of lemon.", minutes: null, tip: "", warning: "" },
+      { title: "Prep the chicken", detail: "Slice each breast in half horizontally so it's about ½ inch thick. Pat dry and season both sides with salt and pepper.", minutes: null, tip: "Dry chicken browns; wet chicken steams.", warning: "" },
+      { title: "Sear until golden", detail: "Heat 1½ tbsp oil over medium-high. Lay the chicken in and leave it for 5 minutes until deep golden, then flip.", minutes: 5, tip: "", warning: "Oil can spit. Lay the chicken away from you." },
+      { title: "Add lemon and garlic", detail: "Cook the second side for 4 minutes, adding minced garlic for the last minute. Squeeze over half the lemon and move to a board.", minutes: 4, tip: "", warning: "Check it reads 165°F (74°C) inside." },
+      { title: "Crisp the rice", detail: "Add the rest of the oil to the same pan. Press the rice into a flat layer and leave it for 6 minutes, until the bottom is golden.", minutes: 6, tip: "A steady crackle means the crust is forming.", warning: "" },
+      { title: "Wilt the spinach", detail: "Toss in the spinach and soy sauce for about a minute, just until the leaves soften.", minutes: 1, tip: "", warning: "" },
+      { title: "Slice and serve", detail: "Slice the chicken, pile it on the rice, and spoon over the pan juices.", minutes: null, tip: "", warning: "" },
     ],
-    finish: ["Leftovers keep 2 days in the fridge; reheat until steaming hot.", "A fried egg or chili crisp on top makes it even better."],
+    finish: ["Leftovers keep 2 days in the fridge. Reheat until steaming hot.", "A fried egg or chili crisp on top is great."],
     alternatives: [
       { title: "Chicken fried rice", why: "Same ingredients, one pan, 15 minutes" },
       { title: "Lemon chicken soup", why: "Cozier, and stretches to serve 4" },
-      { title: "Chicken lettuce wraps", why: "Lighter, with no rice needed" },
+      { title: "Chicken lettuce wraps", why: "Lighter, no rice needed" },
     ],
   };
 

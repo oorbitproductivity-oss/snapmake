@@ -1,5 +1,5 @@
 // Network-first for the app shell so updates show up right away; cache is the offline fallback.
-const CACHE = "snapmake-v1";
+const CACHE = "snapmake-v2";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "icon.svg", "manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
