@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Snapmake: snap what you have, learn what to make</title>
+  <meta name="description" content="Take a photo of what you have, say what you want to make, and get clear step-by-step instructions. Free, no sign-up keys." />
+  <meta name="theme-color" content="#f4efe6" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#121612" media="(prefers-color-scheme: dark)" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://js.puter.com/v2/" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="wordmark" href="./" aria-label="Snapmake home">
+      <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><rect x="3" y="9" width="34" height="26" rx="7" fill="currentColor"/><rect x="13" y="4" width="14" height="8" rx="3" fill="currentColor"/><circle cx="20" cy="22" r="8.5" fill="var(--paper)"/><circle cx="20" cy="22" r="4.5" fill="var(--tomato)"/></svg>
+      <span>Snap<em>make</em></span>
+    </a>
+    <nav class="topnav">
+      <button class="navbtn" id="historyBtn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 10h6M9 14h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span>Saved</span><b class="count" id="savedCount" hidden>0</b>
+      </button>
+    </nav>
+  </header>
+
+  <main id="app">
+    <!-- ============ COMPOSE ============ -->
+    <section class="view view-compose is-active" id="viewCompose" aria-labelledby="heroTitle">
+      <div class="hero">
+        <p class="eyebrow">Photo in · plan out</p>
+        <h1 id="heroTitle">Show me what you've got. <em>I'll show you how to make it</em></h1>
+        <p class="lede">Snap ingredients, parts, beads, a broken hinge, anything. Say what you want to make, and you'll get a clear plan, one step at a time.</p>
+      </div>
+
+      <form class="composer" id="composer" autocomplete="off">
+        <div class="tray" id="tray">
+          <span class="tray-label"><span class="num">01</span> Your photo</span>
+          <input type="file" id="fileInput" accept="image/*" multiple hidden />
+          <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
+          <div class="tray-empty" id="trayEmpty">
+            <div class="tray-art" aria-hidden="true">
+              <span class="polaroid p1"></span><span class="polaroid p2"></span><span class="polaroid p3"></span>
+            </div>
+            <p class="tray-title">Add a photo of what you have</p>
+            <p class="tray-sub">Drop it here, paste it, or use your camera. Up to 4 photos.</p>
+            <div class="tray-actions">
+              <button type="button" class="btn btn-ink" id="cameraBtn">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+                Take photo
+              </button>
+              <button type="button" class="btn btn-ghost" id="uploadBtn">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Upload
+              </button>
+            </div>
+          </div>
+          <ul class="thumbs" id="thumbs" hidden></ul>
+          <div class="drop-hint" aria-hidden="true">Drop to add</div>
+        </div>
+
+        <div class="ask">
+          <label class="ask-label" for="goal"><span class="num">02</span> What do you want to make?</label>
+          <textarea id="goal" rows="3" maxlength="600" placeholder="e.g. A quick dinner for two using what's in this fridge"></textarea>
+          <div class="chips" id="chips" role="list"></div>
+
+          <fieldset class="modes">
+            <legend class="ask-label"><span class="num">03</span> What kind of project?</legend>
+            <div class="seg" id="modes">
+              <label><input type="radio" name="mode" value="auto" checked /><span>Let it decide</span></label>
+              <label><input type="radio" name="mode" value="cook" /><span>Cook</span></label>
+              <label><input type="radio" name="mode" value="build" /><span>Build &amp; fix</span></label>
+              <label><input type="radio" name="mode" value="craft" /><span>Craft</span></label>
+              <label><input type="radio" name="mode" value="care" /><span>Pets &amp; plants</span></label>
+            </div>
+          </fieldset>
+
+          <div class="submit-row">
+            <button class="btn btn-tomato btn-xl" id="makeBtn" type="submit">
+              <span>Make it</span>
+              <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="linkbtn" id="exampleBtn" type="button">See an example first</button>
+          </div>
+          <p class="fineprint">Free AI by <a href="https://puter.com" target="_blank" rel="noopener">Puter</a>. The first time, it asks you to sign in to a free Puter account. No keys, no bill. Your photos go only to the AI and stay off this site.</p>
+        </div>
+      </form>
+
+      <ol class="howto" aria-label="How it works">
+        <li><b>Snap</b><span>Take a photo of the stuff on hand.</span></li>
+        <li><b>Ask</b><span>Say what you want to end up with.</span></li>
+        <li><b>Make</b><span>Follow big, clear steps with timers and read-aloud.</span></li>
+      </ol>
+    </section>
+
+    <!-- ============ SCANNING ============ -->
+    <section class="view view-scan" id="viewScan" aria-live="polite">
+      <div class="scan-stage">
+        <div class="scan-frame" id="scanFrame">
+          <img id="scanImg" alt="" />
+          <div class="scan-noimg" id="scanNoImg">
+            <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="42" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 7"/><path d="M42 62c6 10 30 10 36 0" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="scan-line" aria-hidden="true"></div>
+          <div class="scan-grid" aria-hidden="true"></div>
+          <div class="scan-tags" id="scanTags"></div>
+        </div>
+        <div class="scan-copy">
+          <p class="eyebrow">Working on it</p>
+          <h2 id="scanStatus">Looking closely at your photo…</h2>
+          <ol class="scan-steps" id="scanSteps">
+            <li data-k="0">Spotting what's in the picture</li>
+            <li data-k="1">Checking it against your goal</li>
+            <li data-k="2">Writing the steps</li>
+            <li data-k="3">Adding tips and safety notes</li>
+          </ol>
+          <button class="linkbtn" id="cancelBtn" type="button">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RESULT ============ -->
+    <section class="view view-result" id="viewResult"></section>
+  </main>
+
+  <!-- Focus / step-by-step mode -->
+  <div class="focus" id="focus" role="dialog" aria-modal="true" aria-label="Step-by-step mode" hidden>
+    <div class="focus-top">
+      <button class="iconbtn" id="focusClose" type="button" aria-label="Close step mode"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <div class="focus-progress"><div class="focus-bar" id="focusBar"></div></div>
+      <button class="iconbtn" id="focusSpeak" type="button" aria-label="Read step aloud" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M16 8.5a5 5 0 010 7M18.5 6a8.5 8.5 0 010 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="focus-body" id="focusBody"></div>
+    <div class="focus-nav">
+      <button class="btn btn-ghost-light" id="focusPrev" type="button">Back</button>
+      <button class="btn btn-tomato btn-xl" id="focusNext" type="button">Next step</button>
+    </div>
+  </div>
+
+  <!-- History drawer -->
+  <aside class="drawer" id="drawer" aria-label="Saved makes" hidden>
+    <div class="drawer-scrim" data-close></div>
+    <div class="drawer-panel">
+      <div class="drawer-head">
+        <h3>Saved makes</h3>
+        <button class="iconbtn" data-close type="button" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      </div>
+      <ul class="saved" id="savedList"></ul>
+    </div>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
